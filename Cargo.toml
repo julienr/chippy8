@@ -1,0 +1,15 @@
+[package]
+name = "chippy8"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "chippy8"
+path = "src/main.rs"
+
+[lib]
+name = "chippy8"
+path = "src/lib.rs"
+
+[dependencies]
+eframe = "0.24.1"
