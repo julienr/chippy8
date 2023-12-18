@@ -34,12 +34,15 @@ impl MyApp {
             .gl
             .as_ref()
             .expect("You need to run eframe with the glow backend");
-        let machine = Machine::default();
+        let mut machine = Machine::default();
+        machine.load_rom("roms/ibm_logo.ch8").unwrap();
+        // TODO: Display rom in debug ui
+
         Self {
             display_renderer: Arc::new(Mutex::new(DisplayRenderer::new(
                 gl,
-                machine.display.pixels.cols,
-                machine.display.pixels.rows,
+                machine.display.cols,
+                machine.display.rows,
             ))),
             machine: Arc::new(Mutex::new(machine)),
         }
@@ -73,7 +76,7 @@ impl eframe::App for MyApp {
 impl MyApp {
     fn custom_painting(&mut self, ui: &mut egui::Ui) {
         let display_renderer = self.display_renderer.clone();
-        let pixels = self.machine.lock().display.pixels.clone();
+        let pixels = self.machine.lock().display.clone();
 
         let (rect, _response) = ui.allocate_exact_size(
             egui::Vec2::new(pixels.cols as f32 * 10.0, pixels.rows as f32 * 10.0),
