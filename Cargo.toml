@@ -13,3 +13,4 @@ path = "src/lib.rs"
 
 [dependencies]
 eframe = "0.24.1"
+egui_extras = "0.24.2"

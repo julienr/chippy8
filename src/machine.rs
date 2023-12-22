@@ -38,8 +38,8 @@ impl Default for Machine {
 
 impl Machine {
     fn init_font(&mut self) {
-        for i in 0..FONT.len() {
-            self.ram[FONT_START_ADDRESS + i] = FONT[i];
+        for (i, &glyph) in FONT.iter().enumerate() {
+            self.ram[FONT_START_ADDRESS + i] = glyph;
         }
     }
 

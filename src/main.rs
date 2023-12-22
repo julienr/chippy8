@@ -53,6 +53,23 @@ impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
+                self.ui_display(ui);
+                self.ui_memory(ui);
+            })
+        });
+    }
+
+    fn on_exit(&mut self, gl: Option<&glow::Context>) {
+        if let Some(gl) = gl {
+            self.display_renderer.lock().destroy(gl);
+        }
+    }
+}
+
+impl MyApp {
+    fn ui_display(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 ui.label("The triangle is being painted using ");
                 ui.hyperlink_to("glow", "https://github.com/grovesNL/glow");
@@ -66,14 +83,43 @@ impl eframe::App for MyApp {
         });
     }
 
-    fn on_exit(&mut self, gl: Option<&glow::Context>) {
-        if let Some(gl) = gl {
-            self.display_renderer.lock().destroy(gl);
-        }
+    fn ui_memory(&mut self, ui: &mut egui::Ui) {
+        // https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/table_demo.rs
+        use egui_extras::{Column, TableBuilder};
+        ui.vertical(|ui| {
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+            let table = TableBuilder::new(ui)
+                .column(Column::initial(100.0))
+                .column(Column::initial(100.0));
+            let machine = self.machine.lock();
+            // TODO: Could scroll to ROM start by default
+            /*
+            if let Some(row_nr) = self.scroll_to_row.take() {
+                table = table.scroll_to_row(row_nr, None);
+            }
+            */
+            table
+                .header(20.0, |mut header| {
+                    header.col(|ui| {
+                        ui.strong("Index");
+                    });
+                    header.col(|ui| {
+                        ui.strong("Content");
+                    });
+                })
+                .body(|body| {
+                    body.rows(text_height, machine.ram.len(), |index, mut row| {
+                        row.col(|ui| {
+                            ui.label(index.to_string());
+                        });
+                        row.col(|ui| {
+                            ui.label(format!("{:02x?}", machine.ram[index]));
+                        });
+                    });
+                });
+        });
     }
-}
 
-impl MyApp {
     fn custom_painting(&mut self, ui: &mut egui::Ui) {
         let display_renderer = self.display_renderer.clone();
         let pixels = self.machine.lock().display.clone();
