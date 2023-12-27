@@ -1,31 +1,30 @@
+use eframe::emath::Align;
 use eframe::{egui, egui_glow, glow};
 
-use chippy8::array2d::Array2D;
 use chippy8::machine::Machine;
+use chippy8::texture::RGBAImage;
 use eframe::glow::HasContext;
 use egui::mutex::Mutex;
+use egui_extras::{Column, TableBuilder};
 use std::sync::Arc;
 
 use chippy8::texture::Texture;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([1024.0, 768.0]),
         multisampling: 4,
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
-    eframe::run_native(
-        "Custom 3D painting in eframe using glow",
-        options,
-        Box::new(|cc| Box::new(MyApp::new(cc))),
-    )
+    eframe::run_native("Chippy8", options, Box::new(|cc| Box::new(MyApp::new(cc))))
 }
 
 struct MyApp {
     /// Behind an `Arc<Mutex<…>>` so we can pass it to [`egui::PaintCallback`] and paint later.
     display_renderer: Arc<Mutex<DisplayRenderer>>,
     machine: Arc<Mutex<Machine>>,
+    follow_pc: bool,
 }
 
 impl MyApp {
@@ -41,10 +40,11 @@ impl MyApp {
         Self {
             display_renderer: Arc::new(Mutex::new(DisplayRenderer::new(
                 gl,
-                machine.display.cols,
-                machine.display.rows,
+                machine.display.width(),
+                machine.display.height(),
             ))),
             machine: Arc::new(Mutex::new(machine)),
+            follow_pc: true,
         }
     }
 }
@@ -52,9 +52,15 @@ impl MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                self.ui_display(ui);
-                self.ui_memory(ui);
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    self.ui_display(ui);
+                    self.ui_memory(ui);
+                });
+                ui.horizontal(|ui| {
+                    self.ui_instruction(ui);
+                    self.ui_registers(ui);
+                })
             })
         });
     }
@@ -69,70 +75,116 @@ impl eframe::App for MyApp {
 impl MyApp {
     fn ui_display(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.label("The triangle is being painted using ");
-                ui.hyperlink_to("glow", "https://github.com/grovesNL/glow");
-                ui.label(" (OpenGL).");
-            });
-
             egui::Frame::canvas(ui.style()).show(ui, |ui| {
                 self.custom_painting(ui);
             });
-            ui.label("Drag to rotate!");
         });
     }
 
     fn ui_memory(&mut self, ui: &mut egui::Ui) {
-        // https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/table_demo.rs
-        use egui_extras::{Column, TableBuilder};
+        ui.push_id("memory", |ui| {
+            // https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/table_demo.rs
+            ui.vertical(|ui| {
+                let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+                let machine = self.machine.lock();
+                ui.label(format!("pc={}", machine.program_counter));
+
+                ui.checkbox(&mut self.follow_pc, "Follow PC");
+
+                let mut table = TableBuilder::new(ui)
+                    .column(Column::initial(100.0))
+                    .column(Column::initial(100.0));
+
+                if self.follow_pc {
+                    table = table.scroll_to_row(machine.program_counter, Some(Align::Min));
+                }
+                table
+                    .header(20.0, |mut header| {
+                        header.col(|ui| {
+                            ui.strong("Index");
+                        });
+                        header.col(|ui| {
+                            ui.strong("Content");
+                        });
+                    })
+                    .body(|body| {
+                        body.rows(text_height, machine.ram.len(), |index, mut row| {
+                            row.col(|ui| {
+                                ui.label(index.to_string());
+                            });
+                            row.col(|ui| {
+                                ui.label(format!("{:02x?}", machine.ram[index]));
+                            });
+                        });
+                    });
+            });
+        });
+    }
+
+    fn ui_registers(&mut self, ui: &mut egui::Ui) {
+        ui.push_id("registers", |ui| {
+            ui.vertical(|ui| {
+                ui.label("Registers");
+                let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+                let table = TableBuilder::new(ui)
+                    .column(Column::initial(100.0))
+                    .column(Column::initial(100.0));
+                let machine = self.machine.lock();
+                table
+                    .header(20.0, |mut header| {
+                        header.col(|ui| {
+                            ui.strong("Register");
+                        });
+                        header.col(|ui| {
+                            ui.strong("Content");
+                        });
+                    })
+                    .body(|mut body| {
+                        body.row(text_height, |mut row| {
+                            row.col(|ui| {
+                                ui.label("index");
+                            });
+                            row.col(|ui| {
+                                ui.label(format!("{:02x?}", machine.index_register));
+                            });
+                        });
+                        body.rows(text_height, machine.registers.len(), |index, mut row| {
+                            row.col(|ui| {
+                                ui.label(format!("V{:x?}", index));
+                            });
+                            row.col(|ui| {
+                                ui.label(format!("{:02x?}", machine.registers[index]));
+                            });
+                        });
+                    });
+            });
+        });
+    }
+
+    fn ui_instruction(&mut self, ui: &mut egui::Ui) {
+        let instruction = self.machine.lock().decode_next_instruction();
         ui.vertical(|ui| {
-            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
-            let table = TableBuilder::new(ui)
-                .column(Column::initial(100.0))
-                .column(Column::initial(100.0));
-            let machine = self.machine.lock();
-            // TODO: Could scroll to ROM start by default
-            /*
-            if let Some(row_nr) = self.scroll_to_row.take() {
-                table = table.scroll_to_row(row_nr, None);
+            if ui.button("Execute next").clicked() {
+                self.machine.lock().execute_one();
             }
-            */
-            table
-                .header(20.0, |mut header| {
-                    header.col(|ui| {
-                        ui.strong("Index");
-                    });
-                    header.col(|ui| {
-                        ui.strong("Content");
-                    });
-                })
-                .body(|body| {
-                    body.rows(text_height, machine.ram.len(), |index, mut row| {
-                        row.col(|ui| {
-                            ui.label(index.to_string());
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{:02x?}", machine.ram[index]));
-                        });
-                    });
-                });
+            ui.label(format!("Current instruction: {:?}", instruction));
         });
     }
 
     fn custom_painting(&mut self, ui: &mut egui::Ui) {
         let display_renderer = self.display_renderer.clone();
-        let pixels = self.machine.lock().display.clone();
+        let image = self.machine.lock().display.to_image();
 
         let (rect, _response) = ui.allocate_exact_size(
-            egui::Vec2::new(pixels.cols as f32 * 10.0, pixels.rows as f32 * 10.0),
+            egui::Vec2::new(image.width() as f32 * 10.0, image.height() as f32 * 10.0),
             egui::Sense::drag(),
         );
 
         let callback = egui::PaintCallback {
             rect,
             callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                display_renderer.lock().paint(painter.gl(), &pixels);
+                display_renderer.lock().paint(painter.gl(), &image);
             })),
         };
         ui.painter().add(callback);
@@ -199,16 +251,14 @@ impl DisplayRenderer {
                         vec2(+1.0, +1.0)
                     );
                     const vec2 uvs[4] = vec2[4](
-                        vec2(0.0, 0.0),
-                        vec2(1.0, 0.0),
                         vec2(0.0, 1.0),
-                        vec2(1.0, 1.0)
+                        vec2(1.0, 1.0),
+                        vec2(0.0, 0.0),
+                        vec2(1.0, 0.0)
                     );
-                    uniform float diffuse_aspect_ratio;
                     out vec2 v_uv;
                     void main() {
                         v_uv = uvs[gl_VertexID];
-                        v_uv.y *= diffuse_aspect_ratio;
                         gl_Position = vec4(verts[gl_VertexID], 0.0, 1.0);
                     }
                 "#,
@@ -283,17 +333,13 @@ impl DisplayRenderer {
         }
     }
 
-    fn paint(&self, gl: &glow::Context, pixels: &Array2D<bool>) {
+    fn paint(&mut self, gl: &glow::Context, image: &RGBAImage) {
         use glow::HasContext as _;
         self.texture.bind(gl, 0);
+        self.texture.update(gl, image);
         unsafe {
             gl.use_program(Some(self.program));
             gl.uniform_1_i32(gl.get_uniform_location(self.program, "diffuse").as_ref(), 0);
-            gl.uniform_1_f32(
-                gl.get_uniform_location(self.program, "diffuse_aspect_ratio")
-                    .as_ref(),
-                pixels.rows as f32 / pixels.cols as f32,
-            );
             gl.bind_vertex_array(Some(self.vertex_array));
             gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }

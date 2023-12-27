@@ -1,6 +1,31 @@
-use crate::array2d::Array2D;
 use eframe::glow;
 use eframe::glow::HasContext;
+
+pub struct RGBAImage {
+    _rgba: Vec<u8>,
+    _width: usize,
+    _height: usize,
+}
+
+impl RGBAImage {
+    pub fn new(data: Vec<u8>, width: usize, height: usize) -> RGBAImage {
+        RGBAImage {
+            _rgba: data,
+            _width: width,
+            _height: height,
+        }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self._rgba
+    }
+    pub fn width(&self) -> usize {
+        self._width
+    }
+    pub fn height(&self) -> usize {
+        self._height
+    }
+}
 
 pub struct Texture {
     texture: glow::Texture,
@@ -56,10 +81,6 @@ impl Texture {
         }
     }
 
-    pub fn from_array(gl: &glow::Context, array: &Array2D<u8>) -> Self {
-        Texture::new(gl, array.cols, array.rows, array.as_slice())
-    }
-
     pub fn checkerboard(gl: &glow::Context, width: usize, height: usize) -> Self {
         let square_size = 4;
         let mut arr: Vec<u8> = vec![0; width * height * 4];
@@ -83,6 +104,33 @@ impl Texture {
         unsafe {
             gl.active_texture(texture_unit);
             gl.bind_texture(glow::TEXTURE_2D, Some(self.texture));
+        }
+    }
+
+    /// This MUST only be called after bind()
+    /// => TODO: Enforce this
+    pub fn update(&mut self, gl: &glow::Context, img: &RGBAImage) {
+        if img.width() != self.width || img.height() != self.height {
+            panic!(
+                "Incompatible width/height: {}x{} vs {}x{}",
+                img.width(),
+                img.height(),
+                self.width,
+                self.height
+            );
+        }
+        unsafe {
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGBA8 as i32,
+                self.width as i32,
+                self.height as i32,
+                0,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                Some(img.data()),
+            );
         }
     }
 
