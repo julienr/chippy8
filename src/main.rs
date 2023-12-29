@@ -1,14 +1,19 @@
 use eframe::emath::Align;
 use eframe::{egui, egui_glow, glow};
+use std::time::Duration;
 
 use chippy8::machine::Machine;
 use chippy8::texture::RGBAImage;
 use eframe::glow::HasContext;
 use egui::mutex::Mutex;
 use egui_extras::{Column, TableBuilder};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
+use std::thread::{self, JoinHandle};
 
 use chippy8::texture::Texture;
+
+const TARGET_INSTRUCTIONS_PER_SECOND: u32 = 700;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
@@ -20,11 +25,53 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native("Chippy8", options, Box::new(|cc| Box::new(MyApp::new(cc))))
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum ExecutionMode {
+    StepByStep,
+    Continuous,
+}
+
+#[derive(Debug)]
+enum Message {
+    ChangeMode(ExecutionMode),
+    ExecuteOne,
+    Exit,
+}
+
+fn machine_thread(machine: Arc<Mutex<Machine>>, rx: Receiver<Message>) {
+    let mut execution_mode = ExecutionMode::StepByStep;
+    let sleep_duration = Duration::new(0, 10e9 as u32 / TARGET_INSTRUCTIONS_PER_SECOND);
+    loop {
+        // Handle messages if any
+        let msg = rx.try_recv();
+        match msg {
+            Ok(Message::ExecuteOne) => {
+                machine.lock().execute_one();
+            }
+            Ok(Message::ChangeMode(mode)) => {
+                execution_mode = mode;
+            }
+            Ok(Message::Exit) => break,
+            Err(_) => {}
+        }
+        // Depending on execution mode, either do next instruction
+        // or do nothing (if step by step)
+        if execution_mode == ExecutionMode::Continuous {
+            machine.lock().execute_one();
+        }
+        // Sleep to aim for target instructions per second
+        thread::sleep(sleep_duration);
+    }
+}
+
 struct MyApp {
     /// Behind an `Arc<Mutex<…>>` so we can pass it to [`egui::PaintCallback`] and paint later.
     display_renderer: Arc<Mutex<DisplayRenderer>>,
     machine: Arc<Mutex<Machine>>,
     follow_pc: bool,
+    machine_thread_handle: Option<JoinHandle<()>>,
+    machine_thread_tx: Sender<Message>,
+    execution_mode: ExecutionMode,
 }
 
 impl MyApp {
@@ -34,17 +81,28 @@ impl MyApp {
             .as_ref()
             .expect("You need to run eframe with the glow backend");
         let mut machine = Machine::default();
+        let display_width = machine.display.width();
+        let display_height = machine.display.height();
         machine.load_rom("roms/ibm_logo.ch8").unwrap();
+        // machine.load_rom("roms/test_opcode.ch8").unwrap();
         // TODO: Display rom in debug ui
+        let machine = Arc::new(Mutex::new(machine));
+
+        let (tx, rx) = channel::<Message>();
+        let machine_clone = machine.clone();
+        let handle = thread::spawn(move || machine_thread(machine_clone, rx));
 
         Self {
             display_renderer: Arc::new(Mutex::new(DisplayRenderer::new(
                 gl,
-                machine.display.width(),
-                machine.display.height(),
+                display_width,
+                display_height,
             ))),
-            machine: Arc::new(Mutex::new(machine)),
+            machine,
             follow_pc: true,
+            machine_thread_handle: Some(handle),
+            machine_thread_tx: tx,
+            execution_mode: ExecutionMode::StepByStep,
         }
     }
 }
@@ -66,6 +124,10 @@ impl eframe::App for MyApp {
     }
 
     fn on_exit(&mut self, gl: Option<&glow::Context>) {
+        self.machine_thread_tx.send(Message::Exit).unwrap();
+        if let Some(handle) = self.machine_thread_handle.take() {
+            handle.join().expect("Failed to join");
+        }
         if let Some(gl) = gl {
             self.display_renderer.lock().destroy(gl);
         }
@@ -165,8 +227,27 @@ impl MyApp {
     fn ui_instruction(&mut self, ui: &mut egui::Ui) {
         let instruction = self.machine.lock().decode_next_instruction();
         ui.vertical(|ui| {
-            if ui.button("Execute next").clicked() {
-                self.machine.lock().execute_one();
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut self.execution_mode,
+                    ExecutionMode::StepByStep,
+                    "Step by step",
+                );
+                ui.selectable_value(
+                    &mut self.execution_mode,
+                    ExecutionMode::Continuous,
+                    "Continuous",
+                );
+                // TODO: Could use ui.add(egui::SelectableValue).clicked to only change this when clicked
+                self.machine_thread_tx
+                    .send(Message::ChangeMode(self.execution_mode))
+                    .unwrap();
+            });
+
+            if self.execution_mode == ExecutionMode::StepByStep
+                && ui.button("Execute next").clicked()
+            {
+                self.machine_thread_tx.send(Message::ExecuteOne).unwrap();
             }
             ui.label(format!("Current instruction: {:?}", instruction));
         });
