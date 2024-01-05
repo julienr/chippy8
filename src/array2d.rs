@@ -7,7 +7,10 @@ pub struct Array2D<T> {
     cols: usize,
 }
 
-impl<T> Array2D<T> {
+impl<T> Array2D<T>
+where
+    T: PartialEq,
+{
     pub fn new<F>(rows: usize, cols: usize, f: F) -> Self
     where
         F: FnMut() -> T,
@@ -27,6 +30,10 @@ impl<T> Array2D<T> {
 
     pub fn cols(&self) -> usize {
         self.cols
+    }
+
+    pub fn count_value(&self, value: T) -> usize {
+        self.data.iter().filter(|&v| *v == value).count()
     }
 }
 

@@ -4,6 +4,7 @@ use crate::texture::RGBAImage;
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::num::Wrapping;
 
 const DISPLAY_WIDTH: usize = 64;
 const DISPLAY_HEIGHT: usize = 32;
@@ -107,22 +108,43 @@ impl Machine {
         self.registers[15] = v;
     }
 
+    pub fn flag_register(&self) -> u8 {
+        self.registers[15]
+    }
+
     fn init_font(&mut self) {
         for (i, &glyph) in FONT.iter().enumerate() {
             self.ram[FONT_START_ADDRESS + i] = glyph;
         }
     }
 
-    pub fn load_rom(&mut self, filename: &str) -> io::Result<()> {
+    /// Load from bytes
+    pub fn load_rom_from_bytes(&mut self, data: &[u8]) {
+        for (i, v) in data.iter().enumerate() {
+            self.ram[ROM_START_ADDRESS + i] = *v;
+        }
+        self.program_counter = ROM_START_ADDRESS;
+    }
+
+    /// Load from a ROM file
+    pub fn load_rom_from_file(&mut self, filename: &str) -> io::Result<()> {
         let mut f = File::open(filename)?;
         let mut buf: Vec<u8> = vec![];
         f.read_to_end(&mut buf)?;
 
-        for (i, v) in buf.iter().enumerate() {
-            self.ram[ROM_START_ADDRESS + i] = *v;
-        }
-        self.program_counter = ROM_START_ADDRESS;
+        self.load_rom_from_bytes(&buf);
         Ok(())
+    }
+
+    /// A helper to load from 2 bytes at a time, which make it easy to write
+    /// instructions in hexa; mostly for testing
+    pub fn load_rom_from_instrhex(&mut self, data: &[u16]) {
+        let mut bytes: Vec<u8> = vec![];
+        for v in data.iter() {
+            bytes.push(((v & 0xFF00) >> 8) as u8);
+            bytes.push((v & 0x00FF) as u8);
+        }
+        self.load_rom_from_bytes(&bytes);
     }
 
     pub fn decode_next_instruction(&self) -> Instruction {
@@ -147,7 +169,8 @@ impl Machine {
                 self.registers[reg as usize] = val;
             }
             Instruction::AddToRegister(reg, val) => {
-                self.registers[reg as usize] += val;
+                let v = Wrapping(reg) + Wrapping(val);
+                self.registers[reg as usize] = v.0;
             }
             Instruction::SetIndexRegister(val) => {
                 self.index_register = val;
@@ -204,3 +227,91 @@ const FONT: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl Machine {
+        fn from_instrhex(data: &[u16]) -> Machine {
+            let mut machine = Machine::default();
+            machine.load_rom_from_instrhex(data);
+            machine
+        }
+    }
+
+    #[test]
+    fn test_instr_clear_screen() {
+        let mut machine = Machine::from_instrhex(&[0x00E0]);
+        machine.display.set_pixel(5, 7, true);
+        machine.execute_one();
+        assert!(!machine.display.pixel(5, 7));
+    }
+
+    #[test]
+    fn test_instr_jump() {
+        let mut machine = Machine::from_instrhex(&[0x1ABC]);
+        assert_eq!(machine.program_counter, 0x200);
+        machine.execute_one();
+        assert_eq!(machine.program_counter, 0xABC);
+    }
+
+    #[test]
+    fn test_instr_set_register() {
+        let mut machine = Machine::from_instrhex(&[0x6CDE]);
+        machine.execute_one();
+        assert_eq!(machine.registers[0xC], 0xDE);
+    }
+
+    #[test]
+    fn test_instr_add_to_register() {
+        let mut machine = Machine::from_instrhex(&[0x7032]);
+        // Test that overflow cycles and doesn't set the VF register
+        // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#7xnn-add
+        machine.registers[0] = 0xFF;
+        machine.execute_one();
+        assert_eq!(machine.registers[0], 0x32);
+        assert_eq!(machine.flag_register(), 0);
+    }
+
+    #[test]
+    fn test_instr_set_index_register() {
+        let mut machine = Machine::from_instrhex(&[0xABCD]);
+        machine.execute_one();
+        assert_eq!(machine.index_register, 0xBCD);
+    }
+
+    #[test]
+    fn test_instr_display() {
+        let mut machine = Machine::from_instrhex(&[0xD123, 0xD123]);
+        machine.registers[1] = 10;
+        machine.registers[2] = 5;
+        machine.index_register = 0x345;
+        machine.ram[0x345] = 0b11110000;
+        machine.ram[0x345 + 1] = 0b00001111;
+        machine.ram[0x345 + 2] = 0b001111000;
+        // This line shouldn't be displayed (N=3 in the instruction above)
+        machine.ram[0x345 + 3] = 0b10100000;
+
+        assert_eq!(machine.display.pixels().count_value(true), 0);
+
+        // ==== First execution should show the sprite
+        machine.execute_one();
+        // First row
+        assert!(machine.display.pixel(10, 5));
+        assert!(machine.display.pixel(11, 5));
+        assert!(!machine.display.pixel(14, 5));
+        // Second row
+        assert!(!machine.display.pixel(13, 6));
+        assert!(machine.display.pixel(14, 6));
+        // Third row
+        assert!(!machine.display.pixel(10, 7));
+        assert!(machine.display.pixel(14, 7));
+        // Total white pixels
+        assert_eq!(machine.display.pixels().count_value(true), 12);
+
+        // ==== Executing a second time should erase it
+        machine.execute_one();
+        assert_eq!(machine.display.pixels().count_value(true), 0);
+    }
+}

@@ -83,7 +83,7 @@ impl MyApp {
         let mut machine = Machine::default();
         let display_width = machine.display.width();
         let display_height = machine.display.height();
-        machine.load_rom("roms/ibm_logo.ch8").unwrap();
+        machine.load_rom_from_file("roms/ibm_logo.ch8").unwrap();
         // machine.load_rom("roms/test_opcode.ch8").unwrap();
         // TODO: Display rom in debug ui
         let machine = Arc::new(Mutex::new(machine));
@@ -187,12 +187,16 @@ impl MyApp {
     fn ui_registers(&mut self, ui: &mut egui::Ui) {
         ui.push_id("registers", |ui| {
             ui.vertical(|ui| {
+                let machine = self.machine.lock();
+                ui.horizontal(|ui| {
+                    ui.label("Flag register");
+                    ui.label(format!("{:02x?}", machine.flag_register()));
+                });
                 ui.label("Registers");
                 let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
                 let table = TableBuilder::new(ui)
                     .column(Column::initial(100.0))
                     .column(Column::initial(100.0));
-                let machine = self.machine.lock();
                 table
                     .header(20.0, |mut header| {
                         header.col(|ui| {
