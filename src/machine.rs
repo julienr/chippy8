@@ -82,7 +82,8 @@ impl Display {
 pub struct Machine {
     pub display: Display,
     pub ram: [u8; 4096],
-    pub stack: [u8; 100],
+    pub stack: [u16; 100],
+    stack_index: usize,
     pub program_counter: usize,
     pub index_register: u16,
     pub registers: [u8; 16],
@@ -94,6 +95,7 @@ impl Default for Machine {
             display: Display::default(),
             ram: [0; 4096],
             stack: [0; 100],
+            stack_index: 0,
             program_counter: 0,
             index_register: 0,
             registers: [0; 16],
@@ -110,6 +112,26 @@ impl Machine {
 
     pub fn flag_register(&self) -> u8 {
         self.registers[15]
+    }
+
+    fn push_stack(&mut self, v: u16) {
+        if self.stack_index > self.stack.len() {
+            // TODO: Warning logs / flag to display in UI ?
+            println!("maximum stack depth exceeded ({:?})", self.stack.len());
+            self.stack_index = self.stack.len() - 1;
+        }
+        self.stack[self.stack_index] = v;
+        self.stack_index += 1;
+    }
+
+    fn pop_stack(&mut self) -> u16 {
+        if self.stack_index < 1 {
+            // TODO: Warning logs / flag to display in UI ?
+            println!("trying to pop from empty stack");
+            self.stack_index = 1;
+        }
+        self.stack_index -= 1;
+        self.stack[self.stack_index]
     }
 
     fn init_font(&mut self) {
@@ -151,6 +173,7 @@ impl Machine {
         decode(
             ((self.ram[self.program_counter] as u16) << 8)
                 | self.ram[self.program_counter + 1] as u16,
+            &format!("pc={:#02x}", self.program_counter),
         )
     }
 
@@ -201,8 +224,16 @@ impl Machine {
                     }
                 }
             }
-            Instruction::Unknown(bytes) => {
-                println!("Unknown instruction {:02x?}", bytes)
+            Instruction::Subroutine(v) => {
+                println!("calling subroutine");
+                self.push_stack(self.program_counter as u16);
+                self.program_counter = v as usize;
+            }
+            Instruction::Return => {
+                self.program_counter = self.pop_stack() as usize;
+            }
+            Instruction::Unknown(bytes, location_int) => {
+                println!("Unknown instruction {:#02x?} at {:?}", bytes, location_int)
             }
         }
     }
@@ -313,5 +344,23 @@ mod tests {
         // ==== Executing a second time should erase it
         machine.execute_one();
         assert_eq!(machine.display.pixels().count_value(true), 0);
+    }
+
+    #[test]
+    fn test_instr_subroutine() {
+        let mut machine = Machine::from_instrhex(&[
+            0x2000 + ROM_START_ADDRESS as u16 + 6, // calls subroutine starting two instruction below
+            0x6001,                                // set v0 to '1'
+            0x1000 + ROM_START_ADDRESS as u16 + 4, // infinite loop to self
+            // subroutine:
+            0x6002, // set v0 to '2'
+            0x00EE, // return
+        ]);
+        for _ in 0..5 {
+            machine.execute_one();
+        }
+        assert_eq!(machine.registers[0], 1);
+        // We should have poped from the stack
+        assert_eq!(machine.stack_index, 0);
     }
 }

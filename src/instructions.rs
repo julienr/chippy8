@@ -7,7 +7,9 @@ pub enum Instruction {
     AddToRegister(u8, u8),
     SetIndexRegister(u16),
     Display(u8, u8, u8),
-    Unknown(u16),
+    Subroutine(u16),
+    Return,
+    Unknown(u16, String),
 }
 
 trait NibbleDecoder {
@@ -44,13 +46,17 @@ impl NibbleDecoder for u16 {
     }
 }
 
-pub fn decode(bytes: u16) -> Instruction {
+pub fn decode(bytes: u16, location_int: &str) -> Instruction {
     if bytes == 0 {
         Instruction::Zero
     } else if bytes == 0x00E0 {
         Instruction::ClearScreen
+    } else if bytes == 0x00EE {
+        Instruction::Return
     } else if bytes.category() == 1 {
         Instruction::Jump(bytes.nnn())
+    } else if bytes.category() == 2 {
+        Instruction::Subroutine(bytes.nnn())
     } else if bytes.category() == 6 {
         Instruction::SetRegister(bytes.vx(), bytes.nn())
     } else if bytes.category() == 7 {
@@ -60,6 +66,6 @@ pub fn decode(bytes: u16) -> Instruction {
     } else if bytes.category() == 0xD {
         Instruction::Display(bytes.vx(), bytes.vy(), bytes.n())
     } else {
-        Instruction::Unknown(bytes)
+        Instruction::Unknown(bytes, location_int.to_string())
     }
 }
