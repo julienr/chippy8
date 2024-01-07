@@ -84,7 +84,7 @@ impl MyApp {
         let display_width = machine.display.width();
         let display_height = machine.display.height();
         machine.load_rom_from_file("roms/ibm_logo.ch8").unwrap();
-        // machine.load_rom("roms/test_opcode.ch8").unwrap();
+        // machine.load_rom_from_file("roms/test_opcode.ch8").unwrap();
         // TODO: Display rom in debug ui
         let machine = Arc::new(Mutex::new(machine));
 
