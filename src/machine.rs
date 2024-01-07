@@ -192,7 +192,7 @@ impl Machine {
                 self.registers[reg as usize] = val;
             }
             Instruction::AddToRegister(reg, val) => {
-                let v = Wrapping(reg) + Wrapping(val);
+                let v = Wrapping(self.registers[reg as usize]) + Wrapping(val);
                 self.registers[reg as usize] = v.0;
             }
             Instruction::SetIndexRegister(val) => {
@@ -321,7 +321,7 @@ mod tests {
         // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#7xnn-add
         machine.registers[0] = 0xFF;
         machine.execute_one();
-        assert_eq!(machine.registers[0], 0x32);
+        assert_eq!(machine.registers[0], 0x31);
         assert_eq!(machine.flag_register(), 0);
     }
 
