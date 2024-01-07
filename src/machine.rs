@@ -313,6 +313,10 @@ impl Machine {
                 self.set_flag_register(v & 1);
                 self.registers[rx as usize] = v >> 1;
             }
+            Instruction::JumpWithOffset(offset) => {
+                // TODO: Ambiguous one, may want a feature flag
+                self.program_counter = offset as usize + self.registers[0] as usize;
+            }
         }
     }
 }
@@ -614,5 +618,13 @@ mod tests {
         machine.execute_one();
         assert_eq!(machine.registers[1], 0b10101000);
         assert_eq!(machine.flag_register(), 0);
+    }
+
+    #[test]
+    fn test_instr_jump_with_offset() {
+        let mut machine = Machine::from_instrhex(&[0xB012]);
+        machine.registers[0] = 5;
+        machine.execute_one();
+        assert_eq!(machine.program_counter, 0x012 + 5);
     }
 }

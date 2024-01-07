@@ -22,6 +22,7 @@ pub enum Instruction {
     SubtractYX(u8, u8),
     ShiftLeft(u8, u8),
     ShiftRight(u8, u8),
+    JumpWithOffset(u16),
     Unknown(u16, String),
 }
 
@@ -102,6 +103,8 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::SkipIfNotEqualRegReg(bytes.vx(), bytes.vy())
     } else if bytes.category() == 0xA {
         Instruction::SetIndexRegister(bytes.nnn())
+    } else if bytes.category() == 0xB {
+        Instruction::JumpWithOffset(bytes.nnn())
     } else if bytes.category() == 0xD {
         Instruction::Display(bytes.vx(), bytes.vy(), bytes.n())
     } else {
