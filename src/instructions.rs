@@ -13,6 +13,15 @@ pub enum Instruction {
     SkipIfNotEqualRegVal(u8, u8),
     SkipIfEqualRegReg(u8, u8),
     SkipIfNotEqualRegReg(u8, u8),
+    Set(u8, u8),
+    Or(u8, u8),
+    And(u8, u8),
+    Xor(u8, u8),
+    Add(u8, u8),
+    SubtractXY(u8, u8),
+    SubtractYX(u8, u8),
+    ShiftLeft(u8, u8),
+    ShiftRight(u8, u8),
     Unknown(u16, String),
 }
 
@@ -71,6 +80,24 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::SetRegToVal(bytes.vx(), bytes.nn())
     } else if bytes.category() == 7 {
         Instruction::AddValToReg(bytes.vx(), bytes.nn())
+    } else if bytes.category() == 8 && bytes.n() == 0 {
+        Instruction::Set(bytes.vx(), bytes.vy())
+    } else if bytes.category() == 8 && bytes.n() == 1 {
+        Instruction::Or(bytes.vx(), bytes.vy())
+    } else if bytes.category() == 8 && bytes.n() == 2 {
+        Instruction::And(bytes.vx(), bytes.vy())
+    } else if bytes.category() == 8 && bytes.n() == 3 {
+        Instruction::Xor(bytes.vx(), bytes.vy())
+    } else if bytes.category() == 8 && bytes.n() == 4 {
+        Instruction::Add(bytes.vx(), bytes.vy())
+    } else if bytes.category() == 8 && bytes.n() == 5 {
+        Instruction::SubtractXY(bytes.vx(), bytes.vy())
+    } else if bytes.category() == 8 && bytes.n() == 6 {
+        Instruction::ShiftRight(bytes.vx(), bytes.vy())
+    } else if bytes.category() == 8 && bytes.n() == 7 {
+        Instruction::SubtractYX(bytes.vx(), bytes.vy())
+    } else if bytes.category() == 8 && bytes.n() == 0xE {
+        Instruction::ShiftLeft(bytes.vx(), bytes.vy())
     } else if bytes.category() == 9 {
         Instruction::SkipIfNotEqualRegReg(bytes.vx(), bytes.vy())
     } else if bytes.category() == 0xA {

@@ -177,6 +177,16 @@ impl Machine {
         )
     }
 
+    fn _execute_subtract(&mut self, rx: u8, v1: u8, v2: u8) {
+        // TODO: Not sure if > or >=, tobiasvl guide is not crystal clear
+        if v1 >= v2 {
+            self.set_flag_register(1);
+        } else {
+            self.set_flag_register(0);
+        }
+        self.registers[rx as usize] = (Wrapping(v1) - Wrapping(v2)).0;
+    }
+
     pub fn execute_one(&mut self) {
         let instruction = self.decode_next_instruction();
         self.program_counter += 2;
@@ -254,6 +264,54 @@ impl Machine {
                 if self.registers[reg1 as usize] != self.registers[reg2 as usize] {
                     self.program_counter += 2;
                 }
+            }
+            Instruction::Set(rx, ry) => {
+                self.registers[rx as usize] = self.registers[ry as usize];
+            }
+            Instruction::Or(rx, ry) => {
+                self.registers[rx as usize] |= self.registers[ry as usize];
+            }
+            Instruction::And(rx, ry) => {
+                self.registers[rx as usize] &= self.registers[ry as usize];
+            }
+            Instruction::Xor(rx, ry) => {
+                self.registers[rx as usize] ^= self.registers[ry as usize];
+            }
+            Instruction::Add(rx, ry) => {
+                let v1 = self.registers[rx as usize];
+                let v2 = self.registers[ry as usize];
+                if v1 as usize + v2 as usize > 255 {
+                    self.set_flag_register(1);
+                } else {
+                    self.set_flag_register(0);
+                }
+                self.registers[rx as usize] = (Wrapping(v1) + Wrapping(v2)).0;
+            }
+            Instruction::SubtractXY(rx, ry) => {
+                self._execute_subtract(
+                    rx,
+                    self.registers[rx as usize],
+                    self.registers[ry as usize],
+                );
+            }
+            Instruction::SubtractYX(rx, ry) => {
+                self._execute_subtract(
+                    rx,
+                    self.registers[ry as usize],
+                    self.registers[rx as usize],
+                );
+            }
+            Instruction::ShiftLeft(rx, _) => {
+                // TODO: Need a feature flag here because this is ambiguous
+                let v = self.registers[rx as usize];
+                self.set_flag_register((v >> 7) & 1);
+                self.registers[rx as usize] = v << 1;
+            }
+            Instruction::ShiftRight(rx, _) => {
+                // TODO: Need a feature flag here because this is ambiguous
+                let v = self.registers[rx as usize];
+                self.set_flag_register(v & 1);
+                self.registers[rx as usize] = v >> 1;
             }
         }
     }
@@ -446,5 +504,115 @@ mod tests {
             machine.execute_one();
         }
         assert_eq!(machine.registers[0], 0xFF);
+    }
+
+    #[test]
+    fn test_instr_set() {
+        let mut machine = Machine::from_instrhex(&[0x8120]);
+        machine.registers[1] = 0x42;
+        machine.registers[2] = 0x43;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0x43);
+        assert_eq!(machine.registers[2], 0x43);
+    }
+
+    #[test]
+    fn test_instr_or() {
+        let mut machine = Machine::from_instrhex(&[0x8121]);
+        machine.registers[1] = 0b0101;
+        machine.registers[2] = 0b0011;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0b0111);
+    }
+
+    #[test]
+    fn test_instr_and() {
+        let mut machine = Machine::from_instrhex(&[0x8122]);
+        machine.registers[1] = 0b0101;
+        machine.registers[2] = 0b0011;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0b0001);
+    }
+
+    #[test]
+    fn test_instr_xor() {
+        let mut machine = Machine::from_instrhex(&[0x8123]);
+        machine.registers[1] = 0b0101;
+        machine.registers[2] = 0b0011;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0b0110);
+    }
+
+    #[test]
+    fn test_instr_add() {
+        let mut machine = Machine::from_instrhex(&[0x8124, 0x8124]);
+        machine.registers[1] = 250;
+        machine.registers[2] = 5;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 255);
+        assert_eq!(machine.flag_register(), 0);
+
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 4);
+        assert_eq!(machine.flag_register(), 1);
+    }
+
+    #[test]
+    fn test_instr_subtract_xy() {
+        let mut machine = Machine::from_instrhex(&[0x8125, 0x8125, 0x8125]);
+        machine.registers[1] = 10;
+        machine.registers[2] = 5;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 5);
+        assert_eq!(machine.flag_register(), 1);
+
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0);
+        assert_eq!(machine.flag_register(), 1);
+
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 251);
+        assert_eq!(machine.flag_register(), 0);
+    }
+
+    #[test]
+    fn test_instr_subtract_yx() {
+        let mut machine = Machine::from_instrhex(&[0x8127, 0x8127, 0x8127]);
+        machine.registers[1] = 5;
+        machine.registers[2] = 10;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 5);
+        assert_eq!(machine.flag_register(), 1);
+
+        machine.registers[2] = 4;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 255);
+        assert_eq!(machine.flag_register(), 0);
+    }
+
+    #[test]
+    fn test_instr_shift_right() {
+        let mut machine = Machine::from_instrhex(&[0x8126, 0x8126]);
+        machine.registers[1] = 0b0101;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0b010);
+        assert_eq!(machine.flag_register(), 1);
+
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0b01);
+        assert_eq!(machine.flag_register(), 0);
+    }
+
+    #[test]
+    fn test_instr_shift_left() {
+        let mut machine = Machine::from_instrhex(&[0x812E, 0x812E]);
+        machine.registers[1] = 0b10101010;
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0b01010100);
+        assert_eq!(machine.flag_register(), 1);
+
+        machine.execute_one();
+        assert_eq!(machine.registers[1], 0b10101000);
+        assert_eq!(machine.flag_register(), 0);
     }
 }
