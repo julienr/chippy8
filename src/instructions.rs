@@ -23,6 +23,7 @@ pub enum Instruction {
     ShiftLeft(u8, u8),
     ShiftRight(u8, u8),
     JumpWithOffset(u16),
+    Random(u8, u8),
     Unknown(u16, String),
 }
 
@@ -105,6 +106,8 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::SetIndexRegister(bytes.nnn())
     } else if bytes.category() == 0xB {
         Instruction::JumpWithOffset(bytes.nnn())
+    } else if bytes.category() == 0xC {
+        Instruction::Random(bytes.vx(), bytes.nn())
     } else if bytes.category() == 0xD {
         Instruction::Display(bytes.vx(), bytes.vy(), bytes.n())
     } else {

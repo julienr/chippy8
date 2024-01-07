@@ -568,6 +568,7 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui_extras",
+ "rand",
 ]
 
 [[package]]

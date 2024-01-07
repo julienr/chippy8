@@ -1,6 +1,7 @@
 use crate::array2d::Array2D;
 use crate::instructions::{decode, Instruction};
 use crate::texture::RGBAImage;
+use rand::Rng;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -317,6 +318,11 @@ impl Machine {
                 // TODO: Ambiguous one, may want a feature flag
                 self.program_counter = offset as usize + self.registers[0] as usize;
             }
+            Instruction::Random(rx, v) => {
+                let mut rng = rand::thread_rng();
+                let n1 = rng.gen::<u8>();
+                self.registers[rx as usize] = n1 & v;
+            }
         }
     }
 }
@@ -626,5 +632,19 @@ mod tests {
         machine.registers[0] = 5;
         machine.execute_one();
         assert_eq!(machine.program_counter, 0x012 + 5);
+    }
+
+    #[test]
+    fn test_instr_random() {
+        // We can't easily seed the rng, so what we do is generate a few random numbers and check
+        // they were anded with 0x0F
+        let mut machine = Machine::from_instrhex(&[
+            0xC00F,                            // generate random number,
+            0x1000 + ROM_START_ADDRESS as u16, // infinite loop to rng above
+        ]);
+        for _ in 0..10 {
+            machine.execute_one();
+            assert!(machine.registers[0] < 0x10);
+        }
     }
 }
