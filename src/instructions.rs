@@ -3,8 +3,8 @@ pub enum Instruction {
     Zero,
     ClearScreen,
     Jump(u16),
-    SetRegister(u8, u8),
-    AddToRegister(u8, u8),
+    SetRegToVal(u8, u8),
+    AddValToReg(u8, u8),
     SetIndexRegister(u16),
     Display(u8, u8, u8),
     Subroutine(u16),
@@ -68,9 +68,9 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
     } else if bytes.category() == 5 {
         Instruction::SkipIfEqualRegReg(bytes.vx(), bytes.vy())
     } else if bytes.category() == 6 {
-        Instruction::SetRegister(bytes.vx(), bytes.nn())
+        Instruction::SetRegToVal(bytes.vx(), bytes.nn())
     } else if bytes.category() == 7 {
-        Instruction::AddToRegister(bytes.vx(), bytes.nn())
+        Instruction::AddValToReg(bytes.vx(), bytes.nn())
     } else if bytes.category() == 9 {
         Instruction::SkipIfNotEqualRegReg(bytes.vx(), bytes.vy())
     } else if bytes.category() == 0xA {

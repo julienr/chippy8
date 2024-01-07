@@ -188,10 +188,10 @@ impl Machine {
             Instruction::Jump(v) => {
                 self.program_counter = v as usize;
             }
-            Instruction::SetRegister(reg, val) => {
+            Instruction::SetRegToVal(reg, val) => {
                 self.registers[reg as usize] = val;
             }
-            Instruction::AddToRegister(reg, val) => {
+            Instruction::AddValToReg(reg, val) => {
                 let v = Wrapping(self.registers[reg as usize]) + Wrapping(val);
                 self.registers[reg as usize] = v.0;
             }
@@ -308,14 +308,14 @@ mod tests {
     }
 
     #[test]
-    fn test_instr_set_register() {
+    fn test_instr_set_reg_to_val() {
         let mut machine = Machine::from_instrhex(&[0x6CDE]);
         machine.execute_one();
         assert_eq!(machine.registers[0xC], 0xDE);
     }
 
     #[test]
-    fn test_instr_add_to_register() {
+    fn test_instr_add_val_to_reg() {
         let mut machine = Machine::from_instrhex(&[0x7032]);
         // Test that overflow cycles and doesn't set the VF register
         // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#7xnn-add
