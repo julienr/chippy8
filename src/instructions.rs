@@ -9,6 +9,10 @@ pub enum Instruction {
     Display(u8, u8, u8),
     Subroutine(u16),
     Return,
+    SkipIfEqualRegVal(u8, u8),
+    SkipIfNotEqualRegVal(u8, u8),
+    SkipIfEqualRegReg(u8, u8),
+    SkipIfNotEqualRegReg(u8, u8),
     Unknown(u16, String),
 }
 
@@ -57,10 +61,18 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::Jump(bytes.nnn())
     } else if bytes.category() == 2 {
         Instruction::Subroutine(bytes.nnn())
+    } else if bytes.category() == 3 {
+        Instruction::SkipIfEqualRegVal(bytes.vx(), bytes.nn())
+    } else if bytes.category() == 4 {
+        Instruction::SkipIfNotEqualRegVal(bytes.vx(), bytes.nn())
+    } else if bytes.category() == 5 {
+        Instruction::SkipIfEqualRegReg(bytes.vx(), bytes.vy())
     } else if bytes.category() == 6 {
         Instruction::SetRegister(bytes.vx(), bytes.nn())
     } else if bytes.category() == 7 {
         Instruction::AddToRegister(bytes.vx(), bytes.nn())
+    } else if bytes.category() == 9 {
+        Instruction::SkipIfNotEqualRegReg(bytes.vx(), bytes.vy())
     } else if bytes.category() == 0xA {
         Instruction::SetIndexRegister(bytes.nnn())
     } else if bytes.category() == 0xD {

@@ -235,6 +235,26 @@ impl Machine {
             Instruction::Unknown(bytes, location_int) => {
                 println!("Unknown instruction {:#02x?} at {:?}", bytes, location_int)
             }
+            Instruction::SkipIfEqualRegVal(reg, val) => {
+                if self.registers[reg as usize] == val {
+                    self.program_counter += 2;
+                }
+            }
+            Instruction::SkipIfNotEqualRegVal(reg, val) => {
+                if self.registers[reg as usize] != val {
+                    self.program_counter += 2;
+                }
+            }
+            Instruction::SkipIfEqualRegReg(reg1, reg2) => {
+                if self.registers[reg1 as usize] == self.registers[reg2 as usize] {
+                    self.program_counter += 2;
+                }
+            }
+            Instruction::SkipIfNotEqualRegReg(reg1, reg2) => {
+                if self.registers[reg1 as usize] != self.registers[reg2 as usize] {
+                    self.program_counter += 2;
+                }
+            }
         }
     }
 }
@@ -362,5 +382,69 @@ mod tests {
         assert_eq!(machine.registers[0], 1);
         // We should have poped from the stack
         assert_eq!(machine.stack_index, 0);
+    }
+
+    #[test]
+    fn test_instr_skip_if_equal_reg_val() {
+        let mut machine = Machine::from_instrhex(&[
+            0x3210, // skip if equal => will skip next
+            0x1FFF, // jump to invalid address, this should be skipped
+            0x3211, // skip if equal => this shouldn't skip
+            0x61FF, // set a register
+        ]);
+        machine.registers[2] = 0x10;
+        for _ in 0..4 {
+            machine.execute_one();
+        }
+        assert_eq!(machine.registers[1], 0xFF);
+    }
+
+    #[test]
+    fn test_instr_skip_if_not_equal_reg_val() {
+        let mut machine = Machine::from_instrhex(&[
+            0x4211, // skip if not equal => will skip next
+            0x1FFF, // jump to invalid address, this should be skipped
+            0x4210, // skip if not equal => this shouldn't skip
+            0x61FF, // set a register
+        ]);
+        machine.registers[2] = 0x10;
+        for _ in 0..4 {
+            machine.execute_one();
+        }
+        assert_eq!(machine.registers[1], 0xFF);
+    }
+
+    #[test]
+    fn test_instr_skip_if_equal_reg_reg() {
+        let mut machine = Machine::from_instrhex(&[
+            0x5120, // skip if equal => should skip
+            0x1FFF, // jump to invalid address, this should be skipped
+            0x5130, // skip if equal => this shouldn't skip
+            0x60FF, // set a register
+        ]);
+        machine.registers[1] = 0x11;
+        machine.registers[2] = 0x11;
+        machine.registers[3] = 0x0;
+        for _ in 0..4 {
+            machine.execute_one();
+        }
+        assert_eq!(machine.registers[0], 0xFF);
+    }
+
+    #[test]
+    fn test_instr_skip_if_not_equal_reg_reg() {
+        let mut machine = Machine::from_instrhex(&[
+            0x9130, // skip if not equal => should skip
+            0x1FFF, // jump to invalid address, this should be skipped
+            0x9120, // skip if not equal => this shouldn't skip
+            0x60FF, // set a register
+        ]);
+        machine.registers[1] = 0x11;
+        machine.registers[2] = 0x11;
+        machine.registers[3] = 0x0;
+        for _ in 0..4 {
+            machine.execute_one();
+        }
+        assert_eq!(machine.registers[0], 0xFF);
     }
 }
