@@ -24,6 +24,8 @@ pub enum Instruction {
     ShiftRight(u8, u8),
     JumpWithOffset(u16),
     Random(u8, u8),
+    SkipIfKeyPressed(u8),
+    SkipIfKeyNotPressed(u8),
     Unknown(u16, String),
 }
 
@@ -110,6 +112,10 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::Random(bytes.vx(), bytes.nn())
     } else if bytes.category() == 0xD {
         Instruction::Display(bytes.vx(), bytes.vy(), bytes.n())
+    } else if bytes.category() == 0xE && bytes.nn() == 0x9E {
+        Instruction::SkipIfKeyPressed(bytes.vx())
+    } else if bytes.category() == 0xE && bytes.nn() == 0xA1 {
+        Instruction::SkipIfKeyNotPressed(bytes.vx())
     } else {
         Instruction::Unknown(bytes, location_int.to_string())
     }

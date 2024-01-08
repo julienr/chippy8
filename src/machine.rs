@@ -325,7 +325,19 @@ impl Machine {
                 let n1 = rng.gen::<u8>();
                 self.registers[rx as usize] = n1 & v;
             }
+            Instruction::SkipIfKeyPressed(vx) => {
+                if self.key_pressed[self.registers[vx as usize] as usize] {
+                    self.program_counter += 2;
+                }
+            }
+            Instruction::SkipIfKeyNotPressed(vx) => {
+                if !self.key_pressed[self.registers[vx as usize] as usize] {
+                    self.program_counter += 2;
+                }
+            }
         }
+        // Reset keypressed
+        self.key_pressed.fill(false);
     }
 }
 
@@ -648,5 +660,30 @@ mod tests {
             machine.execute_one();
             assert!(machine.registers[0] < 0x10);
         }
+    }
+
+    #[test]
+    fn test_instr_skip_if_pressed() {
+        let mut machine = Machine::from_instrhex(&[0xE29E, 0x1FFF, 0x6001]);
+        machine.registers[2] = 5;
+        machine.key_pressed[5] = true;
+        machine.execute_one();
+        // Check keypressed are reset after each instruction
+        assert_eq!(machine.key_pressed[5], false);
+
+        // We should have jumped to the set (0x6)
+        machine.execute_one();
+        assert_eq!(machine.registers[0], 1);
+    }
+
+    #[test]
+    fn test_instr_skip_if_not_pressed() {
+        let mut machine = Machine::from_instrhex(&[0xE2A1, 0x1FFF, 0x6001]);
+        machine.registers[2] = 5;
+        machine.key_pressed[5] = false;
+        machine.execute_one();
+        // We should have jumped to the set (0x6)
+        machine.execute_one();
+        assert_eq!(machine.registers[0], 1);
     }
 }
