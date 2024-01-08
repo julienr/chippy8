@@ -410,11 +410,13 @@ impl Machine {
                 self.ram[self.index_register as usize + 2] = val % 10;
             }
             Instruction::RegistersToMemory(vx) => {
+                // Potentially quirky, see https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fx55-and-fx65-store-and-load-memory
                 for i in 0..vx as usize + 1 {
                     self.ram[self.index_register as usize + i] = self.registers[i];
                 }
             }
             Instruction::MemoryToRegisters(vx) => {
+                // Potentially quirky, see https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fx55-and-fx65-store-and-load-memory
                 for i in 0..vx as usize + 1 {
                     self.registers[i] = self.ram[self.index_register as usize + i];
                 }
