@@ -385,6 +385,17 @@ impl Machine {
                     self.set_flag_register(1);
                 }
             }
+            Instruction::GetKey(vx) => {
+                match self
+                    .key_pressed
+                    .iter()
+                    .enumerate()
+                    .find(|(_key, pressed)| **pressed)
+                {
+                    Some((key, _pressed)) => self.registers[vx as usize] = key as u8,
+                    None => self.program_counter -= 2,
+                };
+            }
         }
         // Reset keypressed
         self.key_pressed.fill(false);
@@ -829,5 +840,22 @@ mod tests {
         machine.registers[3] = 233;
         machine.execute_one();
         assert_eq!(machine.index_register, 300);
+    }
+
+    #[test]
+    fn test_instr_get_key() {
+        let mut machine = Machine::from_instrhex(&[
+            0xF20A,                                // get key
+            0x1000 + ROM_START_ADDRESS as u16 + 2, // infinite loop
+        ]);
+        // No key pressed => should just loop to self
+        machine.execute_one();
+        assert_eq!(machine.registers[2], 0);
+        assert_eq!(machine.program_counter, ROM_START_ADDRESS);
+        // Key pressed => should store in register and move on
+        machine.key_pressed[4] = true;
+        machine.execute_one();
+        assert_eq!(machine.program_counter, ROM_START_ADDRESS + 2);
+        assert_eq!(machine.registers[2], 4);
     }
 }

@@ -30,6 +30,7 @@ pub enum Instruction {
     SetDelayTimer(u8),
     SetSoundTimer(u8),
     AddToIndex(u8),
+    GetKey(u8),
     Unknown(u16, String),
 }
 
@@ -128,6 +129,8 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::SetSoundTimer(bytes.vx())
     } else if bytes.category() == 0xF && bytes.nn() == 0x1E {
         Instruction::AddToIndex(bytes.vx())
+    } else if bytes.category() == 0xF && bytes.nn() == 0x0A {
+        Instruction::GetKey(bytes.vx())
     } else {
         Instruction::Unknown(bytes, location_int.to_string())
     }
