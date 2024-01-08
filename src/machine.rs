@@ -378,6 +378,13 @@ impl Machine {
             Instruction::ReadDelayTimer(vx) => self.registers[vx as usize] = self.timers.delay,
             Instruction::SetDelayTimer(vx) => self.timers.delay = self.registers[vx as usize],
             Instruction::SetSoundTimer(vx) => self.timers.sound = self.registers[vx as usize],
+            Instruction::AddToIndex(vx) => {
+                self.index_register += self.registers[vx as usize] as u16;
+                // This is a quirk described here https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#fx1e-add-to-index
+                if self.index_register > 0x1000 {
+                    self.set_flag_register(1);
+                }
+            }
         }
         // Reset keypressed
         self.key_pressed.fill(false);
@@ -813,5 +820,14 @@ mod tests {
         machine.execute_one();
         assert_eq!(machine.timers.sound, 120);
         assert_eq!(machine.timers.delay, 0);
+    }
+
+    #[test]
+    fn test_instr_add_to_index() {
+        let mut machine = Machine::from_instrhex(&[0xF31E]);
+        machine.index_register = 67;
+        machine.registers[3] = 233;
+        machine.execute_one();
+        assert_eq!(machine.index_register, 300);
     }
 }
