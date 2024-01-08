@@ -191,29 +191,28 @@ impl MyApp {
     fn ui_rom_selection(&mut self, ui: &mut egui::Ui) {
         // List all .ch8 files in the roms directory and allow to play them
         if let Ok(paths) = std::fs::read_dir("./roms") {
+            ui.set_height(200.0); // TODO: A hack because as this is the first column, it will otherwise be too small
             egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.vertical(|ui| {
-                    for path in paths {
-                        if let Ok(path) = path {
-                            if path.path().is_dir()
-                                || !path.file_name().to_string_lossy().ends_with(".ch8")
-                            {
-                                continue;
-                            }
-                            ui.horizontal(|ui| {
-                                if ui.button(">").clicked() {
-                                    self.play_rom(&format!(
-                                        "./roms/{}",
-                                        path.file_name().to_string_lossy()
-                                    ));
-                                }
-                                ui.label(path.file_name().to_string_lossy())
-                            });
-                        } else {
-                            ui.label("IO error");
+                for path in paths {
+                    if let Ok(path) = path {
+                        if path.path().is_dir()
+                            || !path.file_name().to_string_lossy().ends_with(".ch8")
+                        {
+                            continue;
                         }
+                        ui.horizontal(|ui| {
+                            if ui.button(">").clicked() {
+                                self.play_rom(&format!(
+                                    "./roms/{}",
+                                    path.file_name().to_string_lossy()
+                                ));
+                            }
+                            ui.label(path.file_name().to_string_lossy())
+                        });
+                    } else {
+                        ui.label("IO error");
                     }
-                })
+                }
             });
         } else {
             ui.label("Couldn't read from ./roms");
@@ -381,7 +380,7 @@ impl MyApp {
             {
                 self.machine_thread_tx.send(Message::ExecuteOne).unwrap();
             }
-            ui.label(format!("Current instruction: {:?}", instruction));
+            ui.label(format!("Current instruction:\n {:?}", instruction));
         });
     }
 
