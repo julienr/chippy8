@@ -40,7 +40,7 @@ enum Message {
 }
 
 fn machine_thread(machine: Arc<Mutex<Machine>>, rx: Receiver<Message>) {
-    let mut execution_mode = ExecutionMode::StepByStep;
+    let mut execution_mode = ExecutionMode::Continuous;
     let sleep_duration = Duration::new(0, 10e9 as u32 / TARGET_INSTRUCTIONS_PER_SECOND);
     loop {
         // Handle messages if any
@@ -81,19 +81,16 @@ impl MyApp {
             .gl
             .as_ref()
             .expect("You need to run eframe with the glow backend");
-        let mut machine = Machine::default();
+        let machine = Machine::default();
         let display_width = machine.display.width();
         let display_height = machine.display.height();
-        machine.load_rom_from_file("roms/ibm_logo.ch8").unwrap();
-        // machine.load_rom_from_file("roms/test_opcode.ch8").unwrap();
-        // TODO: Display rom in debug ui
         let machine = Arc::new(Mutex::new(machine));
 
         let (tx, rx) = channel::<Message>();
         let machine_clone = machine.clone();
         let handle = thread::spawn(move || machine_thread(machine_clone, rx));
 
-        Self {
+        let mut app = Self {
             display_renderer: Arc::new(Mutex::new(DisplayRenderer::new(
                 gl,
                 display_width,
@@ -103,8 +100,10 @@ impl MyApp {
             follow_pc: true,
             machine_thread_handle: Some(handle),
             machine_thread_tx: tx,
-            execution_mode: ExecutionMode::StepByStep,
-        }
+            execution_mode: ExecutionMode::Continuous,
+        };
+        app.play_rom("roms/ibm_logo.ch8");
+        app
     }
 
     fn play_rom(&mut self, filepath: &str) {
