@@ -178,9 +178,13 @@ impl Machine {
     }
 
     fn init_font(&mut self) {
-        for (i, &glyph) in FONT.iter().enumerate() {
-            self.ram[FONT_START_ADDRESS + i] = glyph;
+        for (i, &data) in FONT.iter().enumerate() {
+            self.ram[FONT_START_ADDRESS + i] = data;
         }
+    }
+
+    fn get_character_address(&self, char: u8) -> u16 {
+        FONT_START_ADDRESS as u16 + (char as u16) * 4
     }
 
     /// Load from bytes
@@ -395,6 +399,9 @@ impl Machine {
                     Some((key, _pressed)) => self.registers[vx as usize] = key as u8,
                     None => self.program_counter -= 2,
                 };
+            }
+            Instruction::FontCharacter(vx) => {
+                self.index_register = self.get_character_address(self.registers[vx as usize] & 0x0F)
             }
         }
         // Reset keypressed
@@ -857,5 +864,13 @@ mod tests {
         machine.execute_one();
         assert_eq!(machine.program_counter, ROM_START_ADDRESS + 2);
         assert_eq!(machine.registers[2], 4);
+    }
+
+    #[test]
+    fn test_instr_font_character() {
+        let mut machine = Machine::from_instrhex(&[0xF129]);
+        machine.registers[1] = 0xE;
+        machine.execute_one();
+        assert_eq!(machine.index_register, 0x50 + 14 * 4);
     }
 }
