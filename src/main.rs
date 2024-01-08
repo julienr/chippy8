@@ -1,3 +1,4 @@
+use eframe::egui::InputState;
 use eframe::emath::Align;
 use eframe::{egui, egui_glow, glow};
 use std::time::Duration;
@@ -107,17 +108,60 @@ impl MyApp {
     }
 }
 
+fn _egui_events_to_machine(i: &InputState, machine: &mut Machine) {
+    for event in &i.events {
+        // See keymap at https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#keypad
+        if let egui::Event::Key {
+            key,
+            pressed,
+            repeat: _,
+            modifiers: _,
+        } = event
+        {
+            // TODO: This assume swiss french keyboard
+            match key {
+                egui::Key::Num1 => machine.key_pressed[1] = *pressed,
+                egui::Key::Num2 => machine.key_pressed[2] = *pressed,
+                egui::Key::Num3 => machine.key_pressed[3] = *pressed,
+                egui::Key::Num4 => machine.key_pressed[0xC] = *pressed,
+                egui::Key::Q => machine.key_pressed[4] = *pressed,
+                egui::Key::W => machine.key_pressed[5] = *pressed,
+                egui::Key::E => machine.key_pressed[6] = *pressed,
+                egui::Key::R => machine.key_pressed[0xD] = *pressed,
+                egui::Key::A => machine.key_pressed[7] = *pressed,
+                egui::Key::S => machine.key_pressed[8] = *pressed,
+                egui::Key::D => machine.key_pressed[9] = *pressed,
+                egui::Key::F => machine.key_pressed[0xE] = *pressed,
+                egui::Key::Y => machine.key_pressed[0xA] = *pressed,
+                egui::Key::X => machine.key_pressed[0] = *pressed,
+                egui::Key::C => machine.key_pressed[0xB] = *pressed,
+                egui::Key::V => machine.key_pressed[0xF] = *pressed,
+                _ => {}
+            }
+        }
+    }
+}
+
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Handle keyboard input
+        {
+            let mut machine = self.machine.lock();
+            ctx.input(|i| _egui_events_to_machine(i, &mut machine));
+        }
+        // UI drawing
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical(|ui| {
-                ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
                     self.ui_display(ui);
-                    self.ui_memory(ui);
+                    ui.horizontal(|ui| {
+                        self.ui_instruction(ui);
+                        self.ui_registers(ui);
+                    })
                 });
-                ui.horizontal(|ui| {
-                    self.ui_instruction(ui);
-                    self.ui_registers(ui);
+                ui.vertical(|ui| {
+                    self.ui_memory(ui);
+                    self.ui_keypad(ui);
                 })
             })
         });
@@ -139,6 +183,30 @@ impl MyApp {
         ui.vertical(|ui| {
             egui::Frame::canvas(ui.style()).show(ui, |ui| {
                 self.custom_painting(ui);
+            });
+        });
+    }
+
+    fn ui_keypad(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.label("Keypad");
+            egui::Grid::new("keypad").show(ui, |ui| {
+                // See keypad layout at https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#keypad
+                let keypad_layout = [
+                    [1, 2, 3, 0xC],
+                    [4, 5, 6, 0xD],
+                    [7, 8, 9, 0xE],
+                    [0xA, 0, 0xB, 0xF],
+                ];
+                let machine = self.machine.lock();
+                for row in keypad_layout {
+                    for key in row {
+                        let _ = ui.selectable_label(machine.key_pressed[key], format!("{:X}", key));
+                        // TODO: Could handle events through mouse click, but needs to think through the interaction
+                        // with keyboard bindings
+                    }
+                    ui.end_row();
+                }
             });
         });
     }

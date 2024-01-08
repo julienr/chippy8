@@ -88,6 +88,7 @@ pub struct Machine {
     pub program_counter: usize,
     pub index_register: u16,
     pub registers: [u8; 16],
+    pub key_pressed: [bool; 16],
 }
 
 impl Default for Machine {
@@ -100,6 +101,7 @@ impl Default for Machine {
             program_counter: 0,
             index_register: 0,
             registers: [0; 16],
+            key_pressed: [false; 16],
         };
         machine.init_font();
         machine
