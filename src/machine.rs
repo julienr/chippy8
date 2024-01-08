@@ -409,6 +409,16 @@ impl Machine {
                 self.ram[self.index_register as usize + 1] = (val / 10) % 10;
                 self.ram[self.index_register as usize + 2] = val % 10;
             }
+            Instruction::RegistersToMemory(vx) => {
+                for i in 0..vx as usize + 1 {
+                    self.ram[self.index_register as usize + i] = self.registers[i];
+                }
+            }
+            Instruction::MemoryToRegisters(vx) => {
+                for i in 0..vx as usize + 1 {
+                    self.registers[i] = self.ram[self.index_register as usize + i];
+                }
+            }
         }
         // Reset keypressed
         self.key_pressed.fill(false);
@@ -889,5 +899,38 @@ mod tests {
         assert_eq!(machine.ram[42], 1);
         assert_eq!(machine.ram[43], 5);
         assert_eq!(machine.ram[44], 6);
+    }
+
+    #[test]
+    fn test_instr_registers_to_memory() {
+        let mut machine = Machine::from_instrhex(&[0xF355]);
+        machine.registers[0] = 42;
+        machine.registers[1] = 45;
+        machine.registers[2] = 153;
+        machine.registers[3] = 179;
+        machine.registers[4] = 180; // should be ignored
+        machine.index_register = 10;
+        machine.execute_one();
+        assert_eq!(machine.ram[10], 42);
+        assert_eq!(machine.ram[11], 45);
+        assert_eq!(machine.ram[12], 153);
+        assert_eq!(machine.ram[13], 179);
+        assert_eq!(machine.ram[14], 0);
+    }
+
+    #[test]
+    fn test_instr_memory_to_registers() {
+        let mut machine = Machine::from_instrhex(&[0xF265]);
+        machine.index_register = 20;
+        machine.ram[20] = 42;
+        machine.ram[21] = 43;
+        machine.ram[22] = 134;
+        machine.ram[23] = 144; // should be ignored
+
+        machine.execute_one();
+        assert_eq!(machine.registers[0], 42);
+        assert_eq!(machine.registers[1], 43);
+        assert_eq!(machine.registers[2], 134);
+        assert_eq!(machine.registers[3], 0);
     }
 }

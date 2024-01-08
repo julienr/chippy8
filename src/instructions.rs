@@ -33,6 +33,8 @@ pub enum Instruction {
     GetKey(u8),
     FontCharacter(u8),
     ConvertToDecimal(u8),
+    RegistersToMemory(u8),
+    MemoryToRegisters(u8),
     Unknown(u16, String),
 }
 
@@ -137,6 +139,10 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::FontCharacter(bytes.vx())
     } else if bytes.category() == 0xF && bytes.nn() == 0x33 {
         Instruction::ConvertToDecimal(bytes.vx())
+    } else if bytes.category() == 0xF && bytes.nn() == 0x55 {
+        Instruction::RegistersToMemory(bytes.vx())
+    } else if bytes.category() == 0xF && bytes.nn() == 0x65 {
+        Instruction::MemoryToRegisters(bytes.vx())
     } else {
         Instruction::Unknown(bytes, location_int.to_string())
     }
