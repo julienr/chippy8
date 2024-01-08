@@ -403,6 +403,12 @@ impl Machine {
             Instruction::FontCharacter(vx) => {
                 self.index_register = self.get_character_address(self.registers[vx as usize] & 0x0F)
             }
+            Instruction::ConvertToDecimal(vx) => {
+                let val = self.registers[vx as usize];
+                self.ram[self.index_register as usize] = val / 100;
+                self.ram[self.index_register as usize + 1] = (val / 10) % 10;
+                self.ram[self.index_register as usize + 2] = val % 10;
+            }
         }
         // Reset keypressed
         self.key_pressed.fill(false);
@@ -872,5 +878,16 @@ mod tests {
         machine.registers[1] = 0xE;
         machine.execute_one();
         assert_eq!(machine.index_register, 0x50 + 14 * 4);
+    }
+
+    #[test]
+    fn test_instr_convert_to_decimal() {
+        let mut machine = Machine::from_instrhex(&[0xF233]);
+        machine.registers[2] = 156;
+        machine.index_register = 42;
+        machine.execute_one();
+        assert_eq!(machine.ram[42], 1);
+        assert_eq!(machine.ram[43], 5);
+        assert_eq!(machine.ram[44], 6);
     }
 }

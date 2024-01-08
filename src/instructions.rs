@@ -32,6 +32,7 @@ pub enum Instruction {
     AddToIndex(u8),
     GetKey(u8),
     FontCharacter(u8),
+    ConvertToDecimal(u8),
     Unknown(u16, String),
 }
 
@@ -134,6 +135,8 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::GetKey(bytes.vx())
     } else if bytes.category() == 0xF && bytes.nn() == 0x29 {
         Instruction::FontCharacter(bytes.vx())
+    } else if bytes.category() == 0xF && bytes.nn() == 0x33 {
+        Instruction::ConvertToDecimal(bytes.vx())
     } else {
         Instruction::Unknown(bytes, location_int.to_string())
     }
