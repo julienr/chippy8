@@ -165,7 +165,8 @@ impl eframe::App for MyApp {
                     ui.horizontal(|ui| {
                         self.ui_instruction(ui);
                         self.ui_registers(ui);
-                    })
+                    });
+                    self.ui_timers(ui);
                 });
                 ui.vertical(|ui| {
                     self.ui_memory(ui);
@@ -332,6 +333,25 @@ impl MyApp {
                             });
                         });
                     });
+            });
+        });
+    }
+
+    fn ui_timers(&mut self, ui: &mut egui::Ui) {
+        let mut machine = self.machine.lock();
+        ui.vertical(|ui| {
+            ui.label("Timers");
+            ui.horizontal(|ui| {
+                ui.label(format!("sound: {}", machine.timers.sound));
+                if ui.button("Set to 255").clicked() {
+                    machine.timers.sound = 255;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(format!("delay: {}", machine.timers.delay));
+                if ui.button("Set to 255").clicked() {
+                    machine.timers.delay = 255;
+                }
             });
         });
     }

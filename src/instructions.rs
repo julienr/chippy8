@@ -26,6 +26,9 @@ pub enum Instruction {
     Random(u8, u8),
     SkipIfKeyPressed(u8),
     SkipIfKeyNotPressed(u8),
+    ReadDelayTimer(u8),
+    SetDelayTimer(u8),
+    SetSoundTimer(u8),
     Unknown(u16, String),
 }
 
@@ -116,6 +119,12 @@ pub fn decode(bytes: u16, location_int: &str) -> Instruction {
         Instruction::SkipIfKeyPressed(bytes.vx())
     } else if bytes.category() == 0xE && bytes.nn() == 0xA1 {
         Instruction::SkipIfKeyNotPressed(bytes.vx())
+    } else if bytes.category() == 0xF && bytes.nn() == 0x07 {
+        Instruction::ReadDelayTimer(bytes.vx())
+    } else if bytes.category() == 0xF && bytes.nn() == 0x15 {
+        Instruction::SetDelayTimer(bytes.vx())
+    } else if bytes.category() == 0xF && bytes.nn() == 0x18 {
+        Instruction::SetSoundTimer(bytes.vx())
     } else {
         Instruction::Unknown(bytes, location_int.to_string())
     }

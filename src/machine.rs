@@ -6,6 +6,7 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::num::Wrapping;
+use std::time::SystemTime;
 
 const DISPLAY_WIDTH: usize = 64;
 const DISPLAY_HEIGHT: usize = 32;
@@ -78,6 +79,43 @@ impl Display {
     }
 }
 
+pub struct Timers {
+    pub delay: u8,
+    pub sound: u8,
+    last_tick: SystemTime,
+    last_tick_remainder: f64,
+}
+
+impl Default for Timers {
+    fn default() -> Self {
+        Self {
+            delay: 0,
+            sound: 0,
+            last_tick: now(),
+            last_tick_remainder: 0.0,
+        }
+    }
+}
+
+impl Timers {
+    fn tick(&mut self) {
+        // Timers are decremented by 1 at 60hz
+        let time = now();
+        let elapsed_s = time.duration_since(self.last_tick).unwrap().as_secs_f64();
+        let decrement = self.last_tick_remainder + elapsed_s * 60.0;
+        let rounded_decrement = decrement.floor();
+        // Store the decimal part that we couldn't subtract this tick
+        self.last_tick_remainder = decrement - rounded_decrement;
+        self.delay = (self.delay as f64 - rounded_decrement)
+            .floor()
+            .clamp(0.0, 255.0) as u8;
+        self.sound = (self.sound as f64 - rounded_decrement)
+            .floor()
+            .clamp(0.0, 255.0) as u8;
+        self.last_tick = time;
+    }
+}
+
 /// A CHIP8 computer
 /// https://tobiasvl.github.io/blog/write-a-chip-8-emulator/
 pub struct Machine {
@@ -89,6 +127,7 @@ pub struct Machine {
     pub index_register: u16,
     pub registers: [u8; 16],
     pub key_pressed: [bool; 16],
+    pub timers: Timers,
 }
 
 impl Default for Machine {
@@ -102,6 +141,7 @@ impl Default for Machine {
             index_register: 0,
             registers: [0; 16],
             key_pressed: [false; 16],
+            timers: Timers::default(),
         };
         machine.init_font();
         machine
@@ -335,11 +375,50 @@ impl Machine {
                     self.program_counter += 2;
                 }
             }
+            Instruction::ReadDelayTimer(vx) => self.registers[vx as usize] = self.timers.delay,
+            Instruction::SetDelayTimer(vx) => self.timers.delay = self.registers[vx as usize],
+            Instruction::SetSoundTimer(vx) => self.timers.sound = self.registers[vx as usize],
         }
         // Reset keypressed
         self.key_pressed.fill(false);
+        self.timers.tick();
     }
 }
+
+#[cfg(not(test))]
+pub fn now() -> SystemTime {
+    SystemTime::now()
+}
+
+#[cfg(test)]
+pub mod mock_time {
+    use super::*;
+    use std::cell::RefCell;
+
+    thread_local! {
+        static MOCK_TIME: RefCell<Option<SystemTime>> = RefCell::new(None);
+    }
+
+    pub fn now() -> SystemTime {
+        MOCK_TIME.with(|cell| {
+            cell.borrow()
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(SystemTime::now)
+        })
+    }
+
+    pub fn set_mock_time(time: SystemTime) {
+        MOCK_TIME.with(|cell| *cell.borrow_mut() = Some(time));
+    }
+
+    pub fn clear_mock_time() {
+        MOCK_TIME.with(|cell| *cell.borrow_mut() = None);
+    }
+}
+
+#[cfg(test)]
+pub use mock_time::now;
 
 /// https://tobiasvl.github.io/blog/write-a-chip-8-emulator/#font
 const FONT: [u8; 80] = [
@@ -363,6 +442,8 @@ const FONT: [u8; 80] = [
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
 
     impl Machine {
@@ -685,5 +766,52 @@ mod tests {
         // We should have jumped to the set (0x6)
         machine.execute_one();
         assert_eq!(machine.registers[0], 1);
+    }
+
+    #[test]
+    fn test_instr_read_delay_timer() {
+        let mut machine = Machine::from_instrhex(&[0xF007]);
+        machine.timers.delay = 234;
+        machine.execute_one();
+        assert_eq!(machine.registers[0], 234);
+    }
+
+    #[test]
+    fn test_instr_set_delay_timer() {
+        let mut machine = Machine::from_instrhex(&[0xF015]);
+        machine.registers[0] = 234;
+        machine.execute_one();
+        assert_eq!(machine.timers.sound, 0);
+        assert_eq!(machine.timers.delay, 234);
+    }
+
+    #[test]
+    fn test_instr_set_sound_timer() {
+        let mut machine = Machine::from_instrhex(&[0xF018]);
+        machine.registers[0] = 233;
+        machine.execute_one();
+        assert_eq!(machine.timers.sound, 233);
+        assert_eq!(machine.timers.delay, 0);
+    }
+
+    #[test]
+    fn test_timers_decrement() {
+        mock_time::set_mock_time(SystemTime::UNIX_EPOCH);
+        let mut machine = Machine::from_instrhex(&[
+            0x1000 + ROM_START_ADDRESS as u16, // an infinite loop to self
+        ]);
+        machine.timers.sound = 240;
+        machine.timers.delay = 120;
+        // We move time by 2 seconds but do it in steps that are not all dividable by 60 to test the `last_tick_remainder` behavior
+        mock_time::set_mock_time(SystemTime::UNIX_EPOCH + Duration::from_millis(850));
+        machine.execute_one();
+        mock_time::set_mock_time(SystemTime::UNIX_EPOCH + Duration::from_millis(900));
+        machine.execute_one();
+        mock_time::set_mock_time(SystemTime::UNIX_EPOCH + Duration::from_millis(1232));
+        machine.execute_one();
+        mock_time::set_mock_time(SystemTime::UNIX_EPOCH + Duration::from_millis(2000));
+        machine.execute_one();
+        assert_eq!(machine.timers.sound, 120);
+        assert_eq!(machine.timers.delay, 0);
     }
 }
